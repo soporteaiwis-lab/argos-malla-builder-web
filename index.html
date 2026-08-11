@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ArgOS — Malla Builder Web</title>
+<link rel="icon" href="data:,">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Inter:wght@400;600&display=swap');
+  :root {
+    --bg-dark: #050a15; --bg-card: rgba(20,28,46,.7); --bg-card-hover: rgba(30,42,69,.85);
+    --glass-border: rgba(0,240,255,.15); --neon-cyan: #00f0ff; --neon-green: #00ffa3;
+    --neon-orange: #ea5b0c; --accent-blue: #3b82f6; --accent-violet: #a78bfa;
+    --text-main: #f8fafc; --text-muted: #94a3b8; --mono: "Consolas","Courier New",monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background-color: var(--bg-dark); color: var(--text-main);
+    font-family: 'Inter', -apple-system, sans-serif;
+    background-image: radial-gradient(circle at 15% 10%, rgba(0,240,255,.06), transparent 30%),
+      radial-gradient(circle at 90% 60%, rgba(167,139,250,.05), transparent 30%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3 { font-family: 'Outfit', sans-serif; }
+
+  #topbar {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+    background: rgba(15,23,42,.85); color: #cfd3da; font-size: 12px; padding: 8px 20px;
+    border-bottom: 1px solid var(--glass-border); backdrop-filter: blur(10px);
+  }
+  #topbar strong { color: #fff; }
+  #topbar a { color: var(--neon-cyan); font-weight: 700; text-decoration: none; }
+
+  header.hero { max-width: 900px; margin: 0 auto; padding: 40px 24px 10px; text-align: center; }
+  header.hero h1 { font-size: 1.9rem; font-weight: 800; margin: 0 0 12px; color: #fff; }
+  header.hero p { color: var(--text-muted); font-size: .98rem; line-height: 1.6; margin: 0 auto 14px; max-width: 720px; }
+  .lineage-note {
+    font-size: 11.5px; color: var(--neon-cyan); background: rgba(0,240,255,.06);
+    border: 1px solid rgba(0,240,255,.2); border-radius: 6px; padding: 6px 12px; display: inline-block;
+  }
+
+  main { max-width: 900px; margin: 0 auto; padding: 24px 24px 80px; }
+
+  .step {
+    background: var(--bg-card); backdrop-filter: blur(12px); border: 1px solid var(--glass-border);
+    border-radius: 14px; padding: 22px 24px; margin-bottom: 22px;
+  }
+  .step-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .step-num {
+    width: 30px; height: 30px; border-radius: 8px; background: rgba(0,240,255,.12); color: var(--neon-cyan);
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-family: 'Outfit', sans-serif;
+    flex-shrink: 0; border: 1px solid rgba(0,240,255,.3);
+  }
+  .step-head h2 { font-size: 1.12rem; margin: 0; color: #fff; }
+  .step-sub { color: var(--text-muted); font-size: 12.5px; margin: 0 0 14px; line-height: 1.55; }
+
+  label { font-size: 12px; color: var(--text-muted); display: block; margin: 10px 0 4px; }
+  input[type=text], input[type=number], input[type=email], select, textarea {
+    width: 100%; background: rgba(0,0,0,.3); border: 1px solid var(--glass-border); color: #fff;
+    padding: 8px 10px; border-radius: 6px; font-size: 13px; font-family: inherit;
+  }
+  textarea { min-height: 60px; resize: vertical; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .row2, .row3 { grid-template-columns: 1fr; } }
+
+  .weekdays { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .weekdays label { display: flex; align-items: center; gap: 4px; margin: 0; font-size: 11.5px;
+    border: 1px solid var(--glass-border); border-radius: 5px; padding: 4px 8px; cursor: pointer; }
+  .weekdays input { width: auto; margin: 0; }
+
+  .check-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .check-row input { width: auto; }
+  .check-row label { margin: 0; font-size: 13px; color: var(--text-main); }
+
+  button {
+    font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 12.5px; cursor: pointer;
+    border-radius: 6px; padding: 9px 16px; border: 1px solid var(--neon-cyan);
+    background: rgba(0,240,255,.12); color: var(--neon-cyan); transition: all .2s ease;
+  }
+  button:hover { background: var(--neon-cyan); color: #001018; }
+  button.secundario { border-color: var(--glass-border); background: transparent; color: var(--text-muted); }
+  button.secundario:hover { border-color: var(--neon-cyan); color: var(--neon-cyan); background: rgba(0,240,255,.06); }
+  button.violeta { border-color: var(--accent-violet); background: rgba(167,139,250,.12); color: var(--accent-violet); }
+  button.violeta:hover { background: var(--accent-violet); color: #14101f; }
+  button:disabled { opacity: .5; cursor: default; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+
+  .import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .import-grid { grid-template-columns: 1fr; } }
+  .import-card {
+    background: rgba(0,0,0,.2); border: 1px solid var(--glass-border); border-radius: 10px; padding: 16px;
+  }
+  .import-card h3 { font-size: .95rem; margin: 0 0 6px; color: #fff; }
+  .import-card p { font-size: 11.5px; color: var(--text-muted); margin: 0 0 12px; line-height: 1.5; }
+  input[type=file] { font-size: 12px; color: var(--text-muted); }
+
+  details.config { font-size: 12.5px; }
+  details.config summary { cursor: pointer; color: var(--neon-cyan); font-weight: 600; margin-top: 6px; }
+  details.config .inner { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--glass-border); }
+  details.config ol { padding-left: 20px; line-height: 1.9; color: var(--text-muted); }
+  details.config code { background: rgba(255,255,255,.06); padding: 1px 5px; border-radius: 3px; font-family: var(--mono); }
+
+  pre.code-block {
+    background: rgba(0,0,0,.4); border: 1px solid var(--glass-border); border-radius: 8px;
+    padding: 12px 14px; font-family: var(--mono); font-size: 11.5px; color: #e6f7ff; overflow: auto;
+    white-space: pre-wrap; word-break: break-word; max-height: 300px; margin: 8px 0;
+  }
+
+  .msg { font-size: 12px; margin-top: 10px; padding: 8px 12px; border-radius: 6px; display: none; }
+  .msg.show { display: block; }
+  .msg.ok { background: rgba(0,255,163,.08); border: 1px solid rgba(0,255,163,.3); color: var(--neon-green); }
+  .msg.error { background: rgba(255,71,87,.08); border: 1px solid rgba(255,71,87,.35); color: #ff8a95; }
+  .msg.warn { background: rgba(234,179,8,.08); border: 1px solid rgba(234,179,8,.3); color: #eab308; }
+  .msg ul { margin: 4px 0 0; padding-left: 18px; }
+
+  table.jobs-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+  table.jobs-table th { text-align: left; color: var(--text-muted); font-weight: 600; padding: 6px 8px;
+    border-bottom: 1px solid var(--glass-border); font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; }
+  table.jobs-table td { padding: 7px 8px; border-bottom: 1px solid rgba(255,255,255,.05); color: var(--text-main); }
+  table.jobs-table tr:hover td { background: rgba(255,255,255,.02); }
+  .tipo-tag { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 4px;
+    background: rgba(255,255,255,.06); color: var(--text-muted); }
+  .row-actions button { padding: 3px 9px; font-size: 10.5px; }
+  .empty-hint { color: var(--text-muted); font-size: 12.5px; padding: 10px 2px; }
+
+  .tabs { display: flex; gap: 6px; margin: 14px 0 8px; }
+  .tab { background: transparent; border: 1px solid var(--glass-border); color: var(--text-muted);
+    padding: 5px 14px; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 12px; font-weight: 600; }
+  .tab.activo { background: rgba(0,240,255,.1); color: var(--neon-cyan); border-color: var(--neon-cyan); }
+  .pane[hidden] { display: none; }
+
+  /* ---- vista Planning ---- */
+  .planning-frame { background: #f4f6f8; color: #1a1f27; border-radius: 10px; border: 1px solid var(--glass-border);
+    padding: 18px 20px 24px; margin-top: 14px; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
+  .planning-title { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .05em;
+    margin-bottom: 10px; font-weight: 700; }
+  .inner-box { border: 2px solid #14b8a6; border-radius: 8px; padding: 16px 18px 20px; background: #fff; }
+  .levels { position: relative; margin-top: 6px; }
+  .level-row { display: flex; justify-content: center; gap: 40px; margin-bottom: 40px; position: relative; z-index: 1; }
+  .level-row:last-child { margin-bottom: 0; }
+  .job-card { background: #fff; border: 1px solid #d6dbe1; border-radius: 6px; width: 168px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .job-card .nombre { padding: 8px 10px 5px; font-weight: 700; font-size: 12.5px; color: #111827;
+    border-bottom: 1px solid #eef1f4; }
+  .job-card .fila { padding: 6px 10px 8px; font-size: 13px; color: #0f766e; }
+  #arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  footer { text-align: center; padding: 26px; color: var(--text-muted); font-size: 11.5px;
+    border-top: 1px solid rgba(255,255,255,.05); }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div><strong>ArgOS</strong> — Malla Builder Web · complemento GitHub Pages del módulo Malla Builder local</div>
+  <div>Motor de generación: idéntico al backend local de ArgOS (mismo mapeo de campos)</div>
+</div>
+
+<header class="hero">
+  <h1>🧩 Malla Builder Web</h1>
+  <p>Formulario amigable para cargar requerimientos de una malla Control-M — sin editar el Excel a mano.
+  Los datos se guardan en una <strong>Google Sheet</strong> propia (vía Apps Script) o se pueden importar
+  directo desde el Excel real de BCI. Con cualquiera de los dos orígenes, esta página genera el mismo
+  <strong>XML</strong> (Definition Table) y <strong>JSON</strong> (Automation API) que el módulo Malla Builder
+  local de ArgOS.</p>
+  <div class="lineage-note">⛓ Excel real o Google Sheet (formulario amigable) → jobs normalizados → XML / JSON Control-M → vista Planning simulada</div>
+</header>
+
+<main>
+
+  <!-- PASO 1: configuración Google Sheets -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">1</div><h2>Conectar tu Google Sheet</h2></div>
+    <p class="step-sub">Opcional si solo vas a importar el Excel directo — pero necesario para usar el formulario
+    amigable (paso 3) y guardar los datos en un lugar compartible con tu equipo.</p>
+
+    <label for="script-url">URL del Apps Script Web App (termina en <code>/exec</code>)</label>
+    <input type="text" id="script-url" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+    <div class="btn-row">
+      <button onclick="guardarUrlScript()">💾 Guardar</button>
+      <span id="script-url-status" style="font-size:11.5px; color:var(--text-muted); align-self:center;"></span>
+    </div>
+
+    <details class="config">
+      <summary>¿Cómo configuro la Google Sheet + Apps Script? (una sola vez)</summary>
+      <div class="inner">
+        <ol>
+          <li>Creá una Google Sheet nueva. Renombrá la primera pestaña a <code>Jobs</code>.</li>
+          <li>Pegá esta fila de encabezados en la celda <code>A1</code> (un clic y se copia):
+            <div class="btn-row"><button class="secundario" onclick="copiarEncabezados()">📋 Copiar encabezados</button></div>
+          </li>
+          <li>Menú <code>Extensiones → Apps Script</code>. Borrá el contenido de <code>Code.gs</code> y pegá este código completo:
+            <pre class="code-block" id="apps-script-code"></pre>
+            <div class="btn-row"><button class="secundario" onclick="copiarCodigoScript()">📋 Copiar código</button></div>
+          </li>
+          <li>Guardá. Después <code>Implementar → Nueva implementación</code> → tipo <b>Aplicación web</b> →
+            "Ejecutar como": <b>Yo</b> → "Quién tiene acceso": <b>Cualquier usuario</b> → Implementar.</li>
+          <li>Copiá la URL que te da (termina en <code>/exec</code>) y pegala en el campo de arriba.</li>
+        </ol>
+      </div>
+    </details>
+  </section>
+
+  <!-- PASO 2: cargar datos -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">2</div><h2>Cargar jobs</h2></div>
+    <p class="step-sub">Desde cualquiera de las dos fuentes — se pueden combinar (por ejemplo: importar el Excel
+    real y después agregar/editar jobs a mano en el paso 3).</p>
+    <div class="import-grid">
+      <div class="import-card">
+        <h3>📁 Excel real de BCI</h3>
+        <p>El formulario de orden de cambio Control-M (mismo formato que usa el módulo local de ArgOS).</p>
+        <input type="file" id="excel-input" accept=".xlsx,.xlsm" onchange="importarExcel(this.files[0])">
+      </div>
+      <div class="import-card">
+        <h3>📋 Google Sheet</h3>
+        <p>Trae los jobs cargados con el formulario amigable (paso 3) o editados directo en la Sheet.</p>
+        <button onclick="cargarDesdeSheet()">⬇ Traer jobs desde la Sheet</button>
+      </div>
+    </div>
+    <div class="msg" id="import-msg"></div>
+  </section>
+
+  <!-- PASO 3: formulario amigable -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">3</div><h2>Formulario amigable</h2></div>
+    <p class="step-sub">Agregá o editá un job sin tocar el Excel. "Guardar en Google Sheet" además de agregarlo a
+    la lista de trabajo, lo persiste en la Sheet para el resto del equipo.</p>
+
+    <div class="row3">
+      <div><label>Nombre Job Control-M *</label><input type="text" id="f-job_name" placeholder="PYMDBK001"></div>
+      <div><label>Acción</label>
+        <select id="f-accion"><option value="crear">Crear</option><option value="actualizar">Actualizar</option><option value="eliminar">Eliminar</option></select>
+      </div>
+      <div><label>Tipo de proceso</label>
+        <select id="f-tipo" onchange="actualizarCamposTipo()">
+          <option value="script">Script (shell)</option>
+          <option value="databricks">Databricks</option>
+          <option value="adf">Azure Data Factory</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div><label>Aplicación Control-M *</label><input type="text" id="f-application" placeholder="SUC_PYME_DBK"></div>
+      <div><label>Subaplicación Control-M</label><input type="text" id="f-sub_application" placeholder="EXTRACCION_PEP"></div>
+    </div>
+    <label>Nombre del proceso</label><input type="text" id="f-nombre_proceso">
+    <label>Descripción</label><textarea id="f-description"></textarea>
+
+    <div id="tipo-campos"></div>
+
+    <div class="row2">
+      <div><label>Servidor donde se ejecuta</label><input type="text" id="f-host"></div>
+      <div><label>Cuenta con la cual se ejecuta</label><input type="text" id="f-run_as"></div>
+    </div>
+    <div class="row2">
+      <div><label>Predecesores (coma-separado)</label><input type="text" id="f-predecesores" placeholder="PYMDBK001, PYMDBK002"></div>
+      <div><label>Sucesores (coma-separado)</label><input type="text" id="f-sucesores"></div>
+    </div>
+
+    <label>Días de ejecución</label>
+    <div class="weekdays" id="f-weekdays">
+      <label><input type="checkbox" value="MON">Lun</label><label><input type="checkbox" value="TUE">Mar</label>
+      <label><input type="checkbox" value="WED">Mié</label><label><input type="checkbox" value="THU">Jue</label>
+      <label><input type="checkbox" value="FRI">Vie</label><label><input type="checkbox" value="SAT">Sáb</label>
+      <label><input type="checkbox" value="SUN">Dom</label>
+    </div>
+    <div class="row3">
+      <div><label>Calendario</label><input type="text" id="f-calendario" placeholder="CAL_HABIL"></div>
+      <div><label>Hora de inicio (HHMM)</label><input type="text" id="f-hora_inicio" placeholder="1800"></div>
+      <div><label>Reintenta cada (minutos)</label><input type="number" id="f-rerun_every_minutes" min="0"></div>
+    </div>
+    <div class="row2">
+      <div><label>Días para mantener activo</label><input type="number" id="f-keep_active_days" min="0"></div>
+      <div><label>Mail si falla (NOTOK)</label><input type="email" id="f-mail_on_notok"></div>
+    </div>
+    <div class="check-row"><input type="checkbox" id="f-confirm"><label for="f-confirm">Requiere confirmación manual</label></div>
+
+    <div class="btn-row" style="margin-top:16px;">
+      <button onclick="agregarDesdeFormulario(false)">➕ Agregar a la lista de trabajo</button>
+      <button class="violeta" onclick="agregarDesdeFormulario(true)">💾 Agregar y guardar en Google Sheet</button>
+      <button class="secundario" onclick="limpiarFormulario()">🗑 Limpiar formulario</button>
+    </div>
+    <div class="msg" id="form-msg"></div>
+  </section>
+
+  <!-- PASO 4: tabla de trabajo -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">4</div><h2>Jobs listos para generar</h2></div>
+    <p class="step-sub">Se van acumulando acá, sin importar de dónde vinieron (Excel, Sheet o formulario).</p>
+    <div id="tabla-jobs-wrap"><div class="empty-hint">Todavía no cargaste ningún job.</div></div>
+    <div class="btn-row" style="margin-top:10px;"><button class="secundario" onclick="limpiarLista()">🗑 Limpiar toda la lista</button></div>
+  </section>
+
+  <!-- PASO 5: generar -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">5</div><h2>Generar XML + JSON</h2></div>
+    <label>Nombre de la carpeta / malla (Application Control-M)</label>
+    <input type="text" id="folder-name-input" placeholder="se completa solo con la Aplicación de los jobs">
+    <div class="btn-row" style="margin-top:12px;">
+      <button onclick="generarMalla()" id="generar-btn">🧬 Generar XML + JSON</button>
+      <button class="secundario" onclick="descargar('xml')">⬇ Descargar XML</button>
+      <button class="secundario" onclick="descargar('json')">⬇ Descargar JSON</button>
+    </div>
+    <div class="msg" id="generar-msg"></div>
+
+    <div id="resultado" hidden>
+      <div class="tabs">
+        <button class="tab activo" id="tab-xml" onclick="mostrarTab('xml')">XML</button>
+        <button class="tab" id="tab-json" onclick="mostrarTab('json')">JSON</button>
+        <button class="tab" id="tab-plan" onclick="mostrarTab('plan')">Vista Planning</button>
+      </div>
+      <div class="pane" id="pane-xml"><pre class="code-block" id="code-xml" style="max-height:420px;"></pre></div>
+      <div class="pane" id="pane-json" hidden><pre class="code-block" id="code-json" style="max-height:420px;"></pre></div>
+      <div class="pane" id="pane-plan" hidden>
+        <div class="planning-frame">
+          <div class="planning-title">Vista simulada — Control-M Planning</div>
+          <div class="inner-box">
+            <div class="levels" id="levels"><svg id="arrows"></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>ArgOS — Malla Builder Web · AIWIS · complemento GitHub Pages del piloto CUBI-K / BCI</footer>
+
+<script>
+/* =========================================================================
+   Motor de parseo/generación — puerto 1:1 de src/backend/malla_builder.py
+   ========================================================================= */
+const ACCION_KEYWORDS = { "crear job":"crear", "actualizar job":"actualizar", "eliminar job":"eliminar", "sin accion":"sin_accion" };
+const WEEKDAY_MAP = { "lunes":"MON","martes":"TUE","miercoles":"WED","jueves":"THU","viernes":"FRI","sabado":"SAT","domingo":"SUN" };
+const WEEKDAY_ORDER = ["MON","TUE","WED","THU","FRI","SAT","SUN"];
+const LABEL_MAP = {
+  "nombre proceso":"nombre_proceso", "nombre job control-m":"job_name",
+  "aplicacion control-m":"application", "subaplicacion control-m":"sub_application",
+  "descripcion proceso":"description", "requiere confirmacion manual (si/no)":"confirm_raw",
+  "valor para mantener activo (keep active)":"keep_active_raw", "predecesores":"predecesores_raw",
+  "sucesores":"sucesores_raw", "ubicacion fisica del proceso":"ubicacion_raw",
+  "servidor en donde se ejecuta":"host", "cuenta con la cual se ejecuta":"run_as",
+  "calendario de ejecucion":"calendario_raw", "hora de inicio o rango de horas de inicio":"hora_inicio_raw",
+  "condiciones ciclicas del proceso":"ciclicas_raw", "parametros necesarios y su formato":"parametros_raw",
+};
+
+function normalizar(s) {
+  return (s ?? "").toString().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g," ").trim().toLowerCase();
+}
+function colIndex(letra) { return letra.charCodeAt(0) - 65; }
+function celda(filas, filaNum, colLetra) {
+  const row = filas[filaNum - 1];
+  if (!row) return "";
+  const v = row[colIndex(colLetra)];
+  return v === undefined || v === null ? "" : v;
+}
+function esEnteroPositivo(v) {
+  if (typeof v === "number" && Number.isFinite(v) && v > 0 && Number.isInteger(v)) return v;
+  return null;
+}
+function parseLista(texto) {
+  const t = normalizar(texto);
+  if (["n/a","na","-","s/i","ninguno",""].includes(t)) return [];
+  return String(texto || "").split(/[,;]/).map(p => p.trim())
+    .filter(p => p && !["n/a","na","-","s/i","ninguno"].includes(normalizar(p)));
+}
+function parseUbicacion(texto) {
+  texto = String(texto || "").trim();
+  let m = texto.match(/Databricks Job ID:\s*([\w-]+)/i);
+  if (m) return { tipo: "databricks", databricks_job_id: m[1] };
+  m = texto.match(/AI-Pipeline:\s*(\S+)/i);
+  if (m) return { tipo: "adf", pipeline_name: m[1] };
+  m = texto.match(/(.+?)\s*\(\s*Archivo:\s*([^)]+)\)/i);
+  if (m) return { tipo: "script", file_path: m[1].trim(), file_name: m[2].trim() };
+  return { tipo: "otro", detalle: texto };
+}
+function parseCalendario(texto) {
+  const textoNorm = normalizar(texto);
+  const out = { weekdays: [], calendario: null };
+  let m = String(texto || "").match(/calendario:\s*([\w-]+)/i);
+  if (m) out.calendario = m[1];
+  if (textoNorm.includes("todos los dias") || textoNorm.includes("diario")) {
+    out.weekdays = [...WEEKDAY_ORDER];
+  } else {
+    for (const [palabra, cod] of Object.entries(WEEKDAY_MAP)) {
+      if (textoNorm.includes(palabra) && !out.weekdays.includes(cod)) out.weekdays.push(cod);
+    }
+    if (textoNorm.includes("lunes a viernes")) out.weekdays = ["MON","TUE","WED","THU","FRI"];
+  }
+  return out;
+}
+function buscarRerunMinutos(...textos) {
+  for (const t of textos) { const m = String(t || "").match(/cada\s+(\d+)\s*minutos?/i); if (m) return parseInt(m[1], 10); }
+  return null;
+}
+function buscarMailNotok(...textos) {
+  for (const t0 of textos) {
+    const t = String(t0 || "");
+    if (/falla|notok/i.test(t)) { const m = t.match(/([\w.-]+@[\w.-]+)/); if (m) return m[1]; }
+  }
+  return null;
+}
+function leerBloquesSheet(filas) {
+  const maxFila = filas.length;
+  const inicios = [];
+  for (let r = 1; r <= maxFila; r++) { const n = esEnteroPositivo(celda(filas, r, "B")); if (n !== null) inicios.push([r, n]); }
+  const bloques = [];
+  for (let i = 0; i < inicios.length; i++) {
+    const [inicio, num] = inicios[i];
+    const fin = i + 1 < inicios.length ? inicios[i + 1][0] - 1 : maxFila;
+    bloques.push({ filaInicio: inicio, filaFin: fin, numero: num });
+  }
+  return bloques;
+}
+function parsearBloque(filas, bloque) {
+  let accion = "crear"; const campos = {}; const camposExtra = {};
+  for (let r = bloque.filaInicio; r <= bloque.filaFin; r++) {
+    const etiqueta = String(celda(filas, r, "C") ?? "").trim();
+    const valor = celda(filas, r, "E");
+    if (!etiqueta) continue;
+    const etiquetaNorm = normalizar(etiqueta);
+    if (etiquetaNorm.startsWith("indicar con una x")) {
+      for (let r2 = r; r2 <= Math.min(r + 4, bloque.filaFin); r2++) {
+        const textoOpcion = normalizar(celda(filas, r2, "E"));
+        const marca2 = String(celda(filas, r2, "D") ?? "").trim().toLowerCase();
+        for (const [kw, cod] of Object.entries(ACCION_KEYWORDS)) if (textoOpcion.startsWith(kw) && marca2 === "x") accion = cod;
+      }
+      continue;
+    }
+    if (etiquetaNorm.startsWith("fecha de asistencia")) continue;
+    const clave = LABEL_MAP[etiquetaNorm];
+    if (clave) campos[clave] = valor; else camposExtra[etiqueta] = valor;
+  }
+  return { accion, campos, camposExtra };
+}
+function normalizarJobDeExcel(sheetName, bloqueNum, parsed) {
+  const c = parsed.campos;
+  const jobName = String(c.job_name || `JOB${String(bloqueNum).padStart(3,"0")}`).trim();
+  const ubicacion = parseUbicacion(c.ubicacion_raw || "");
+  const calendario = parseCalendario(c.calendario_raw || "");
+  const confirmRaw = normalizar(c.confirm_raw || "");
+  let keepActive = null;
+  if (c.keep_active_raw !== undefined && c.keep_active_raw !== "" && !isNaN(parseInt(c.keep_active_raw, 10))) keepActive = parseInt(c.keep_active_raw, 10);
+  const rerun = buscarRerunMinutos(c.hora_inicio_raw, c.ciclicas_raw, c.parametros_raw);
+  const mailNotok = buscarMailNotok(c.parametros_raw, c.ciclicas_raw);
+  let horaInicio = null;
+  const m = String(c.hora_inicio_raw || "").trim().match(/^(\d{3,4})$/);
+  if (m) horaInicio = m[1].padStart(4, "0");
+  const tipoDetalle = {};
+  for (const [k, v] of Object.entries(ubicacion)) if (k !== "tipo") tipoDetalle[k] = v;
+  return {
+    job_name: jobName, nombre_proceso: c.nombre_proceso || jobName, accion: parsed.accion,
+    application: c.application || "", sub_application: c.sub_application || "", description: c.description || "",
+    confirm: confirmRaw.startsWith("si"), keep_active_days: keepActive,
+    predecesores: parseLista(c.predecesores_raw || ""), sucesores: parseLista(c.sucesores_raw || ""),
+    tipo: ubicacion.tipo, tipo_detalle: tipoDetalle, host: c.host || "", run_as: c.run_as || "",
+    weekdays: calendario.weekdays, calendario: calendario.calendario, hora_inicio: horaInicio,
+    rerun_every_minutes: rerun, mail_on_notok: mailNotok, origen: `Excel · ${sheetName} bloque ${bloqueNum}`,
+  };
+}
+function parsearWorkbook(workbook) {
+  const jobs = []; const advertencias = [];
+  for (const sheetName of workbook.SheetNames) {
+    if (!sheetName.trim().endsWith("Formulario")) continue;
+    const ws = workbook.Sheets[sheetName];
+    const filas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+    for (const bloque of leerBloquesSheet(filas)) {
+      const parsed = parsearBloque(filas, bloque);
+      if (parsed.accion === "sin_accion") continue;
+      if (!parsed.campos.job_name) { advertencias.push(`${sheetName} bloque ${bloque.numero}: sin 'Nombre Job Control-M', se omite.`); continue; }
+      jobs.push(normalizarJobDeExcel(sheetName, bloque.numero, parsed));
+    }
+  }
+  return { jobs, advertencias };
+}
+
+function jobFromSheetRow(row) {
+  const tipo = (row.tipo || "otro").toString().toLowerCase();
+  const tipoDetalle = {};
+  if (tipo === "script") { tipoDetalle.file_path = row.file_path || ""; tipoDetalle.file_name = row.file_name || ""; }
+  else if (tipo === "databricks") tipoDetalle.databricks_job_id = row.databricks_job_id || "";
+  else if (tipo === "adf") tipoDetalle.pipeline_name = row.pipeline_name || "";
+  else tipoDetalle.detalle = row.detalle_otro || "";
+  return {
+    job_name: row.job_name, nombre_proceso: row.nombre_proceso || row.job_name, accion: row.accion || "crear",
+    application: row.application || "", sub_application: row.sub_application || "", description: row.description || "",
+    confirm: String(row.confirm).toLowerCase() === "true" || row.confirm === true,
+    keep_active_days: row.keep_active_days !== "" && row.keep_active_days != null ? parseInt(row.keep_active_days, 10) : null,
+    predecesores: parseLista(row.predecesores || ""), sucesores: parseLista(row.sucesores || ""),
+    tipo, tipo_detalle: tipoDetalle, host: row.host || "", run_as: row.run_as || "",
+    weekdays: row.weekdays ? String(row.weekdays).split(",").map(s => s.trim()).filter(Boolean) : [],
+    calendario: row.calendario || null, hora_inicio: row.hora_inicio || null,
+    rerun_every_minutes: row.rerun_every_minutes !== "" && row.rerun_every_minutes != null ? parseInt(row.rerun_every_minutes, 10) : null,
+    mail_on_notok: row.mail_on_notok || null, origen: "Google Sheet",
+  };
+}
+
+function xmlEscape(s) { return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;"); }
+
+function calcularLayout(jobs) {
+  const nombres = new Set(jobs.map(j => j.job_name));
+  const edgesMap = new Map();
+  for (const j of jobs) {
+    for (const pred of j.predecesores) if (nombres.has(pred)) edgesMap.set(`${pred}|${j.job_name}`, [pred, j.job_name]);
+    for (const suc of j.sucesores) if (nombres.has(suc)) edgesMap.set(`${j.job_name}|${suc}`, [j.job_name, suc]);
+  }
+  const predecesoresDe = {}; nombres.forEach(n => predecesoresDe[n] = new Set());
+  for (const [a, b] of edgesMap.values()) predecesoresDe[b].add(a);
+  const nivel = {}; let pendientes = new Set(nombres); let guardia = 0;
+  while (pendientes.size && guardia < 100) {
+    guardia++;
+    const resueltos = [];
+    for (const n of pendientes) {
+      const preds = [...predecesoresDe[n]];
+      if (preds.every(p => p in nivel)) { nivel[n] = preds.length ? Math.max(...preds.map(p => nivel[p])) + 1 : 0; resueltos.push(n); }
+    }
+    if (!resueltos.length) { pendientes.forEach(n => nivel[n] = 0); break; }
+    resueltos.forEach(n => pendientes.delete(n));
+  }
+  const aristas = [...edgesMap.values()].map(([a, b]) => ({ origen: a, destino: b }));
+  return { niveles: nivel, aristas };
+}
+
+function generarXml(folderName, jobs, datacenter = "BCI_DESA") {
+  const partes = ['<?xml version="1.0" encoding="utf-8"?>',
+    '<!--Generado por ArgOS - Malla Builder Web (simulado)-->',
+    '<DEFTABLE xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="Folder.xsd">',
+    `\t<FOLDER DATACENTER="${xmlEscape(datacenter)}" PLATFORM="UNIX" FOLDER_NAME="${xmlEscape(folderName)}" TYPE="1">`];
+  jobs.forEach((j, i) => {
+    const isn = i + 1;
+    const tasktype = (j.tipo === "script" || j.tipo === "otro") ? "Job" : "Dummy";
+    const weekdaysAttr = (j.weekdays && j.weekdays.length) ? "1" : "0";
+    const atributos = [`JOBISN="${isn}"`, `APPLICATION="${xmlEscape(j.application)}"`, `SUB_APPLICATION="${xmlEscape(j.sub_application)}"`,
+      `JOBNAME="${xmlEscape(j.job_name)}"`, `DESCRIPTION="${xmlEscape(j.description)}"`, `RUN_AS="${xmlEscape(j.run_as)}"`,
+      `TASKTYPE="${tasktype}"`, `NODEID="${xmlEscape(j.host)}"`, `CONFIRM="${j.confirm ? "1" : "0"}"`,
+      `DAYSCAL="${xmlEscape(j.calendario || "")}"`, `WEEKDAYS="${weekdaysAttr}"`];
+    if (j.hora_inicio) atributos.push(`TIMEFROM="${j.hora_inicio}"`);
+    if (j.rerun_every_minutes !== null && j.rerun_every_minutes !== undefined) atributos.push(`INTERVAL="${String(j.rerun_every_minutes).padStart(5,"0")}M"`);
+    if (j.keep_active_days !== null && j.keep_active_days !== undefined) atributos.push(`MAXDAYS="${j.keep_active_days}"`);
+    partes.push(`\t\t<JOB ${atributos.join(" ")}>`);
+    if (j.tipo === "script") partes.push(`\t\t\t<!-- Script: ${xmlEscape(j.tipo_detalle.file_path||"")}/${xmlEscape(j.tipo_detalle.file_name||"")} -->`);
+    else if (j.tipo === "databricks") partes.push(`\t\t\t<VARIABLE NAME="%%DATABRICKS_JOB_ID" VALUE="${xmlEscape(j.tipo_detalle.databricks_job_id||"")}"/>`);
+    else if (j.tipo === "adf") partes.push(`\t\t\t<VARIABLE NAME="%%AI_PIPELINE_NAME" VALUE="${xmlEscape(j.tipo_detalle.pipeline_name||"")}"/>`);
+    for (const pred of j.predecesores) partes.push(`\t\t\t<INCOND NAME="${xmlEscape(pred)}-TO-${xmlEscape(j.job_name)}" ODATE="ODAT" AND_OR="A"/>`);
+    for (const suc of j.sucesores) partes.push(`\t\t\t<OUTCOND NAME="${xmlEscape(j.job_name)}-TO-${xmlEscape(suc)}" ODATE="ODAT" SIGN="+"/>`);
+    if (j.mail_on_notok) {
+      partes.push('\t\t\t<ON STMT="*" CODE="NOTOK">');
+      partes.push(`\t\t\t\t<DOMAIL URGENCY="R" DEST="${xmlEscape(j.mail_on_notok)}" SUBJECT="Fallo en ${xmlEscape(j.job_name)}" ATTACH_SYSOUT="Y"/>`);
+      partes.push('\t\t\t</ON>');
+    }
+    partes.push('\t\t</JOB>');
+  });
+  partes.push('\t</FOLDER>', '</DEFTABLE>');
+  return partes.join("\n");
+}
+
+function generarJson(folderName, jobs, datacenter = "BCI_DESA") {
+  const tipoControlM = { script:"Job:Script", databricks:"Job:Azure Databricks", adf:"Job:ApplicationIntegrator:AI Azure Data Factory", otro:"Job:Command" };
+  const folder = { Type: "SimpleFolder", ControlmServer: datacenter, OrderMethod: "Manual" };
+  for (const j of jobs) {
+    const jobJson = { Type: tipoControlM[j.tipo], SubApplication: j.sub_application, Application: j.application,
+      Description: j.description, RunAs: j.run_as, Host: j.host, Confirm: !!j.confirm };
+    if (j.keep_active_days !== null && j.keep_active_days !== undefined) jobJson.DaysKeepActive = String(j.keep_active_days);
+    if (j.tipo === "script") { jobJson.FileName = j.tipo_detalle.file_name || ""; jobJson.FilePath = j.tipo_detalle.file_path || ""; }
+    else if (j.tipo === "databricks") jobJson["Databricks Job ID"] = j.tipo_detalle.databricks_job_id || "";
+    else if (j.tipo === "adf") jobJson["AI-Pipeline Name"] = j.tipo_detalle.pipeline_name || "";
+    const when = {};
+    if (j.weekdays && j.weekdays.length) when.WeekDays = j.weekdays;
+    if (j.calendario) when.MonthDaysCalendar = j.calendario;
+    if (j.hora_inicio) when.FromTime = j.hora_inicio;
+    if (Object.keys(when).length) jobJson.When = when;
+    if (j.rerun_every_minutes !== null && j.rerun_every_minutes !== undefined) jobJson.RerunLimit = { Units: "Minutes", Every: String(j.rerun_every_minutes) };
+    if (j.predecesores.length) {
+      jobJson.eventsToWaitFor = { Type:"WaitForEvents", Events: j.predecesores.map(p => ({ Event: `${p}-TO-${j.job_name}` })) };
+      jobJson.eventsToDelete = { Type:"DeleteEvents", Events: j.predecesores.map(p => ({ Event: `${p}-TO-${j.job_name}` })) };
+    }
+    if (j.sucesores.length) jobJson.eventsToAdd = { Type:"AddEvents", Events: j.sucesores.map(s => ({ Event: `${j.job_name}-TO-${s}` })) };
+    if (j.mail_on_notok) jobJson["IfBase:Folder:CompletionStatus_NOTOK"] = { Type:"If:CompletionStatus", CompletionStatus:"NOTOK",
+      Mail_0: { Type:"Action:Mail", Subject:`Fallo en ${j.job_name}`, To: j.mail_on_notok, AttachOutput:true } };
+    folder[j.job_name] = jobJson;
+  }
+  const result = {}; result[folderName] = folder; return result;
+}
+
+/* =========================================================================
+   Estado + UI
+   ========================================================================= */
+let jobsDeTrabajo = [];
+let generado = null;
+
+function guardarUrlScript() {
+  const val = document.getElementById("script-url").value.trim();
+  localStorage.setItem("argos_mb_script_url", val);
+  document.getElementById("script-url-status").textContent = val ? "✓ Guardada" : "";
+}
+function obtenerUrlScript() { return localStorage.getItem("argos_mb_script_url") || ""; }
+
+function mostrarMsg(id, tipo, texto, lista) {
+  const el = document.getElementById(id);
+  el.className = `msg show ${tipo}`;
+  el.innerHTML = texto + (lista && lista.length ? "<ul>" + lista.map(x => `<li>${x}</li>`).join("") + "</ul>" : "");
+}
+
+function upsertJob(job) {
+  const i = jobsDeTrabajo.findIndex(j => j.job_name === job.job_name);
+  if (i >= 0) jobsDeTrabajo[i] = job; else jobsDeTrabajo.push(job);
+}
+
+function renderTabla() {
+  const wrap = document.getElementById("tabla-jobs-wrap");
+  if (!jobsDeTrabajo.length) { wrap.innerHTML = '<div class="empty-hint">Todavía no cargaste ningún job.</div>'; return; }
+  const filas = jobsDeTrabajo.map(j => `
+    <tr>
+      <td><b>${j.job_name}</b></td>
+      <td><span class="tipo-tag">${j.tipo}</span></td>
+      <td>${j.application || "—"} / ${j.sub_application || "—"}</td>
+      <td>${j.predecesores.join(", ") || "—"} → ${j.sucesores.join(", ") || "—"}</td>
+      <td>${j.accion}</td>
+      <td>${j.origen || "—"}</td>
+      <td class="row-actions"><button class="secundario" onclick="quitarJob('${j.job_name.replace(/'/g,"\\'")}')">Quitar</button></td>
+    </tr>`).join("");
+  wrap.innerHTML = `<table class="jobs-table"><thead><tr>
+    <th>Job</th><th>Tipo</th><th>App/Subapp</th><th>Pred → Suc</th><th>Acción</th><th>Origen</th><th></th>
+    </tr></thead><tbody>${filas}</tbody></table>`;
+}
+function quitarJob(nombre) { jobsDeTrabajo = jobsDeTrabajo.filter(j => j.job_name !== nombre); renderTabla(); }
+function limpiarLista() { jobsDeTrabajo = []; renderTabla(); }
+
+async function importarExcel(file) {
+  if (!file) return;
+  const msg = "import-msg";
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    const { jobs, advertencias } = parsearWorkbook(wb);
+    jobs.forEach(upsertJob);
+    renderTabla();
+    mostrarMsg(msg, advertencias.length ? "warn" : "ok",
+      `✅ ${jobs.length} job(s) importados de <b>${file.name}</b>.`, advertencias);
+  } catch (e) {
+    mostrarMsg(msg, "error", `Error leyendo el Excel: ${e.message}`);
+  }
+}
+
+async function cargarDesdeSheet() {
+  const url = obtenerUrlScript();
+  const msg = "import-msg";
+  if (!url) { mostrarMsg(msg, "error", "Primero configurá la URL del Apps Script Web App (paso 1)."); return; }
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    const jobs = (data.jobs || []).map(jobFromSheetRow).filter(j => j.job_name);
+    jobs.forEach(upsertJob);
+    renderTabla();
+    mostrarMsg(msg, "ok", `✅ ${jobs.length} job(s) traídos desde la Google Sheet.`);
+  } catch (e) {
+    mostrarMsg(msg, "error", `No se pudo leer la Sheet: ${e.message}. Revisá la URL y que el deploy sea "Cualquier usuario".`);
+  }
+}
+
+function actualizarCamposTipo() {
+  const tipo = document.getElementById("f-tipo").value;
+  const cont = document.getElementById("tipo-campos");
+  if (tipo === "script") cont.innerHTML = `<div class="row2">
+    <div><label>Ruta (path)</label><input type="text" id="f-file_path" placeholder="/SucPyme/she"></div>
+    <div><label>Archivo</label><input type="text" id="f-file_name" placeholder="sh_carga_clientes_pep.sh"></div></div>`;
+  else if (tipo === "databricks") cont.innerHTML = `<label>Databricks Job ID</label><input type="text" id="f-databricks_job_id">`;
+  else if (tipo === "adf") cont.innerHTML = `<label>Nombre del pipeline (Azure Data Factory)</label><input type="text" id="f-pipeline_name">`;
+  else cont.innerHTML = `<label>Detalle</label><input type="text" id="f-detalle_otro">`;
+}
+actualizarCamposTipo();
+
+function leerFormulario() {
+  const val = id => document.getElementById(id) ? document.getElementById(id).value.trim() : "";
+  const tipo = val("f-tipo");
+  const tipoDetalle = {};
+  if (tipo === "script") { tipoDetalle.file_path = val("f-file_path"); tipoDetalle.file_name = val("f-file_name"); }
+  else if (tipo === "databricks") tipoDetalle.databricks_job_id = val("f-databricks_job_id");
+  else if (tipo === "adf") tipoDetalle.pipeline_name = val("f-pipeline_name");
+  else tipoDetalle.detalle = val("f-detalle_otro");
+  const weekdays = [...document.querySelectorAll("#f-weekdays input:checked")].map(el => el.value);
+  const rerun = val("f-rerun_every_minutes");
+  const keepActive = val("f-keep_active_days");
+  return {
+    job_name: val("f-job_name"), accion: val("f-accion"), application: val("f-application"),
+    sub_application: val("f-sub_application"), nombre_proceso: val("f-nombre_proceso") || val("f-job_name"),
+    description: val("f-description"), tipo, tipo_detalle: tipoDetalle, host: val("f-host"), run_as: val("f-run_as"),
+    predecesores: parseLista(val("f-predecesores")), sucesores: parseLista(val("f-sucesores")),
+    weekdays, calendario: val("f-calendario") || null, hora_inicio: val("f-hora_inicio") || null,
+    rerun_every_minutes: rerun ? parseInt(rerun, 10) : null,
+    keep_active_days: keepActive ? parseInt(keepActive, 10) : null,
+    mail_on_notok: val("f-mail_on_notok") || null,
+    confirm: document.getElementById("f-confirm").checked, origen: "Formulario amigable",
+  };
+}
+
+function limpiarFormulario() {
+  ["f-job_name","f-application","f-sub_application","f-nombre_proceso","f-description","f-host","f-run_as",
+   "f-predecesores","f-sucesores","f-calendario","f-hora_inicio","f-rerun_every_minutes","f-keep_active_days","f-mail_on_notok"]
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+  document.querySelectorAll("#f-weekdays input").forEach(el => el.checked = false);
+  document.getElementById("f-confirm").checked = false;
+  document.getElementById("f-tipo").value = "script";
+  actualizarCamposTipo();
+}
+
+async function agregarDesdeFormulario(guardarEnSheet) {
+  const job = leerFormulario();
+  const msg = "form-msg";
+  if (!job.job_name || !job.application) { mostrarMsg(msg, "error", "Faltan campos obligatorios: Nombre Job Control-M y Aplicación."); return; }
+  upsertJob(job);
+  renderTabla();
+  if (!guardarEnSheet) { mostrarMsg(msg, "ok", `✅ "${job.job_name}" agregado a la lista de trabajo.`); return; }
+
+  const url = obtenerUrlScript();
+  if (!url) { mostrarMsg(msg, "error", "Agregado a la lista, pero no se guardó en la Sheet: falta configurar la URL del Apps Script (paso 1)."); return; }
+  try {
+    const rowPayload = {
+      job_name: job.job_name, accion: job.accion, application: job.application, sub_application: job.sub_application,
+      nombre_proceso: job.nombre_proceso, description: job.description, tipo: job.tipo,
+      file_path: job.tipo_detalle.file_path || "", file_name: job.tipo_detalle.file_name || "",
+      databricks_job_id: job.tipo_detalle.databricks_job_id || "", pipeline_name: job.tipo_detalle.pipeline_name || "",
+      detalle_otro: job.tipo_detalle.detalle || "", host: job.host, run_as: job.run_as,
+      predecesores: job.predecesores.join(", "), sucesores: job.sucesores.join(", "),
+      weekdays: job.weekdays.join(","), calendario: job.calendario || "", hora_inicio: job.hora_inicio || "",
+      rerun_every_minutes: job.rerun_every_minutes ?? "", confirm: job.confirm,
+      keep_active_days: job.keep_active_days ?? "", mail_on_notok: job.mail_on_notok || "", observaciones: "",
+    };
+    // sin Content-Type explícito: evita el preflight CORS que Apps Script no maneja bien
+    const r = await fetch(url, { method: "POST", body: JSON.stringify(rowPayload) });
+    if (!r.ok) throw new Error(await r.text());
+    mostrarMsg(msg, "ok", `✅ "${job.job_name}" guardado en la Google Sheet.`);
+  } catch (e) {
+    mostrarMsg(msg, "error", `Agregado a la lista, pero falló el guardado en la Sheet: ${e.message}`);
+  }
+}
+
+function calcularFolderName() {
+  const manual = document.getElementById("folder-name-input").value.trim();
+  if (manual) return manual;
+  const apps = [...new Set(jobsDeTrabajo.map(j => j.application).filter(Boolean))];
+  return apps[0] || "MALLA_SIN_NOMBRE";
+}
+
+function generarMalla() {
+  const msg = "generar-msg";
+  if (!jobsDeTrabajo.length) { mostrarMsg(msg, "error", "No hay jobs cargados todavía (pasos 2 o 3)."); return; }
+  const folderName = calcularFolderName();
+  const xml = generarXml(folderName, jobsDeTrabajo);
+  const json = generarJson(folderName, jobsDeTrabajo);
+  const layout = calcularLayout(jobsDeTrabajo);
+  generado = { folderName, xml, json, layout };
+
+  document.getElementById("code-xml").textContent = xml;
+  document.getElementById("code-json").textContent = JSON.stringify(json, null, 2);
+  document.getElementById("resultado").hidden = false;
+  mostrarMsg(msg, "ok", `✅ Malla "${folderName}" generada — ${jobsDeTrabajo.length} job(s).`);
+  renderPlanning(folderName, jobsDeTrabajo, layout);
+  mostrarTab("xml");
+}
+
+function mostrarTab(cual) {
+  ["xml","json","plan"].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.toggle("activo", t === cual);
+    document.getElementById(`pane-${t}`).hidden = t !== cual;
+  });
+}
+
+function descargar(tipo) {
+  if (!generado) { alert('Primero generá el XML/JSON con el botón "Generar XML + JSON".'); return; }
+  const texto = tipo === "xml" ? generado.xml : JSON.stringify(generado.json, null, 2);
+  const blob = new Blob([texto], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `${generado.folderName}.${tipo}`; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function cssId(nombre) { return nombre.replace(/[^A-Za-z0-9_-]/g, "_"); }
+
+function renderPlanning(folderName, jobs, layout) {
+  const porNivel = {};
+  for (const j of jobs) { const n = layout.niveles[j.job_name] ?? 0; (porNivel[n] = porNivel[n] || []).push(j); }
+  const levelsEl = document.getElementById("levels");
+  levelsEl.querySelectorAll(".level-row").forEach(r => r.remove());
+  const svg = document.getElementById("arrows");
+  svg.innerHTML = `<defs><marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>`;
+  const niveles = Object.keys(porNivel).map(Number).sort((a,b) => a-b);
+  for (const n of niveles) {
+    const row = document.createElement("div"); row.className = "level-row";
+    for (const j of porNivel[n]) {
+      const card = document.createElement("div"); card.className = "job-card"; card.id = `card-${cssId(j.job_name)}`;
+      const iconos = { script:"📄", databricks:"🧬", adf:"☁️", otro:"⚙️" };
+      card.innerHTML = `<div class="nombre">${j.job_name}</div><div class="fila">${iconos[j.tipo] || "⚙️"}</div>`;
+      row.appendChild(card);
+    }
+    levelsEl.appendChild(row);
+  }
+  requestAnimationFrame(() => dibujarFlechas(layout.aristas));
+}
+
+function dibujarFlechas(aristas) {
+  const svg = document.getElementById("arrows");
+  const cont = document.getElementById("levels");
+  const rectCont = cont.getBoundingClientRect();
+  svg.setAttribute("width", cont.scrollWidth); svg.setAttribute("height", cont.scrollHeight);
+  for (const a of aristas) {
+    const o = document.getElementById(`card-${cssId(a.origen)}`), d = document.getElementById(`card-${cssId(a.destino)}`);
+    if (!o || !d) continue;
+    const ro = o.getBoundingClientRect(), rd = d.getBoundingClientRect();
+    const x1 = ro.left - rectCont.left + ro.width/2, y1 = ro.bottom - rectCont.top;
+    const x2 = rd.left - rectCont.left + rd.width/2, y2 = rd.top - rectCont.top;
+    const midY = (y1+y2)/2;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", `M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2-8}`);
+    path.setAttribute("stroke", "#94a3b8"); path.setAttribute("stroke-width", "1.5"); path.setAttribute("fill", "none");
+    path.setAttribute("marker-end", "url(#arrowhead)");
+    svg.appendChild(path);
+  }
+}
+
+/* ---- config helpers ---- */
+const HEADERS_SHEET = ["job_name","accion","application","sub_application","nombre_proceso","description","tipo",
+  "file_path","file_name","databricks_job_id","pipeline_name","detalle_otro","host","run_as","predecesores",
+  "sucesores","weekdays","calendario","hora_inicio","rerun_every_minutes","confirm","keep_active_days",
+  "mail_on_notok","observaciones","actualizado_en"];
+
+function copiarEncabezados() { navigator.clipboard.writeText(HEADERS_SHEET.join("\t")); }
+function copiarCodigoScript() { navigator.clipboard.writeText(document.getElementById("apps-script-code").textContent); }
+
+const APPS_SCRIPT_SOURCE = `/**
+ * ArgOS — Malla Builder Web · Apps Script backend para la Google Sheet
+ * "formulario amigable" de requerimientos Control-M.
+ *
+ * Instrucciones:
+ * 1. Crear una Google Sheet nueva. Renombrar la primera pestaña a "Jobs".
+ * 2. En la fila 1 pegar (una celda por columna, en este orden) los encabezados
+ *    que aparecen en HEADERS más abajo — o usar el botón "Copiar encabezados"
+ *    de la página web y pegarlos en A1.
+ * 3. Extensiones -> Apps Script. Borrar el contenido de Code.gs y pegar este
+ *    archivo completo. Guardar.
+ * 4. Implementar -> Nueva implementación -> Tipo "Aplicación web".
+ *    - Ejecutar como: Yo (tu cuenta)
+ *    - Quién tiene acceso: Cualquier usuario
+ *    Implementar, autorizar permisos, y copiar la URL que te entrega
+ *    (termina en /exec). Esa es la URL que se pega en la página web.
+ */
+
+const SHEET_NAME = "Jobs";
+const HEADERS = [
+  "job_name", "accion", "application", "sub_application", "nombre_proceso",
+  "description", "tipo", "file_path", "file_name", "databricks_job_id",
+  "pipeline_name", "detalle_otro", "host", "run_as", "predecesores",
+  "sucesores", "weekdays", "calendario", "hora_inicio", "rerun_every_minutes",
+  "confirm", "keep_active_days", "mail_on_notok", "observaciones", "actualizado_en",
+];
+
+function _sheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+  }
+  return sheet;
+}
+
+function _json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  const sheet = _sheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const jobs = data.slice(1)
+    .filter(function (row) { return row[0]; })
+    .map(function (row) {
+      const obj = {};
+      headers.forEach(function (h, i) { obj[h] = row[i]; });
+      return obj;
+    });
+  return _json({ ok: true, jobs: jobs });
+}
+
+function doPost(e) {
+  const sheet = _sheet();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const body = JSON.parse(e.postData.contents);
+  const jobNameCol = headers.indexOf("job_name");
+  const data = sheet.getDataRange().getValues();
+
+  let rowIndex = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][jobNameCol] === body.job_name) { rowIndex = i + 1; break; }
+  }
+
+  const rowValues = headers.map(function (h) {
+    if (h === "actualizado_en") return new Date().toISOString();
+    return body[h] !== undefined && body[h] !== null ? body[h] : "";
+  });
+
+  if (rowIndex > 0) {
+    sheet.getRange(rowIndex, 1, 1, headers.length).setValues([rowValues]);
+  } else {
+    sheet.appendRow(rowValues);
+  }
+  return _json({ ok: true, job_name: body.job_name });
+}
+`;
+
+document.getElementById("apps-script-code").textContent = APPS_SCRIPT_SOURCE;
+document.getElementById("script-url").value = obtenerUrlScript();
+</script>
+</body>
+</html>
