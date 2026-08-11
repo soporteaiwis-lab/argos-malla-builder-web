@@ -597,7 +597,13 @@ function guardarUrlScript() {
   localStorage.setItem("argos_mb_script_url", val);
   document.getElementById("script-url-status").textContent = val ? "✓ Guardada" : "";
 }
-function obtenerUrlScript() { return localStorage.getItem("argos_mb_script_url") || ""; }
+// Sheet oficial de ArgOS ("ArgOS — Malla Builder — Jobs", carpeta compartida
+// soporte.aiwis@gmail.com / aiwiscontacto@gmail.com). Queda en "" hasta
+// desplegar el Apps Script una vez (Extensiones -> Apps Script -> Implementar)
+// y pegar acá la URL /exec resultante -- a partir de ahí es el default para
+// todo el mundo, sin que nadie tenga que volver a pegarla.
+const DEFAULT_SCRIPT_URL = "";
+function obtenerUrlScript() { return localStorage.getItem("argos_mb_script_url") || DEFAULT_SCRIPT_URL; }
 
 function mostrarMsg(id, tipo, texto, lista) {
   const el = document.getElementById(id);
@@ -606,7 +612,7 @@ function mostrarMsg(id, tipo, texto, lista) {
 }
 
 function upsertJob(job) {
-  const i = jobsDeTrabajo.findIndex(j => j.job_name === job.job_name);
+  const i = jobsDeTrabajo.findIndex(j => j.job_name === job.job_name && j.application === job.application);
   if (i >= 0) jobsDeTrabajo[i] = job; else jobsDeTrabajo.push(job);
 }
 
@@ -894,11 +900,15 @@ function doPost(e) {
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const body = JSON.parse(e.postData.contents);
   const jobNameCol = headers.indexOf("job_name");
+  const appCol = headers.indexOf("application");
   const data = sheet.getDataRange().getValues();
 
+  // clave compuesta (application + job_name): una Sheet puede recibir jobs de
+  // varias mallas/pedidos distintos, y dos mallas distintas pueden reusar el
+  // mismo nombre de job — sin esto, la segunda pisaría la fila de la primera.
   let rowIndex = -1;
   for (let i = 1; i < data.length; i++) {
-    if (data[i][jobNameCol] === body.job_name) { rowIndex = i + 1; break; }
+    if (data[i][jobNameCol] === body.job_name && data[i][appCol] === body.application) { rowIndex = i + 1; break; }
   }
 
   const rowValues = headers.map(function (h) {

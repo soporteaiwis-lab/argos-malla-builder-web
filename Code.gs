@@ -59,11 +59,15 @@ function doPost(e) {
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const body = JSON.parse(e.postData.contents);
   const jobNameCol = headers.indexOf("job_name");
+  const appCol = headers.indexOf("application");
   const data = sheet.getDataRange().getValues();
 
+  // clave compuesta (application + job_name): una Sheet puede recibir jobs de
+  // varias mallas/pedidos distintos, y dos mallas distintas pueden reusar el
+  // mismo nombre de job — sin esto, la segunda pisaría la fila de la primera.
   let rowIndex = -1;
   for (let i = 1; i < data.length; i++) {
-    if (data[i][jobNameCol] === body.job_name) { rowIndex = i + 1; break; }
+    if (data[i][jobNameCol] === body.job_name && data[i][appCol] === body.application) { rowIndex = i + 1; break; }
   }
 
   const rowValues = headers.map(function (h) {
