@@ -247,6 +247,8 @@
       <div><label>Aplicación Control-M *</label><input type="text" id="f-application" placeholder="SUC_PYME_DBK"></div>
       <div><label>Subaplicación Control-M</label><input type="text" id="f-sub_application" placeholder="EXTRACCION_PEP"></div>
     </div>
+    <label>Responsable de la malla</label>
+    <input type="text" id="f-responsable" placeholder="Quién pide/responde por esta malla">
     <label>Nombre del proceso</label><input type="text" id="f-nombre_proceso">
     <label>Descripción</label><textarea id="f-description"></textarea>
 
@@ -487,6 +489,7 @@ function jobFromSheetRow(row) {
   else tipoDetalle.detalle = row.detalle_otro || "";
   return {
     job_name: row.job_name, nombre_proceso: row.nombre_proceso || row.job_name, accion: row.accion || "crear",
+    responsable: row.responsable || "",
     application: row.application || "", sub_application: row.sub_application || "", description: row.description || "",
     confirm: String(row.confirm).toLowerCase() === "true" || row.confirm === true,
     keep_active_days: row.keep_active_days !== "" && row.keep_active_days != null ? parseInt(row.keep_active_days, 10) : null,
@@ -602,7 +605,7 @@ function guardarUrlScript() {
 // desplegar el Apps Script una vez (Extensiones -> Apps Script -> Implementar)
 // y pegar acá la URL /exec resultante -- a partir de ahí es el default para
 // todo el mundo, sin que nadie tenga que volver a pegarla.
-const DEFAULT_SCRIPT_URL = "";
+const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx2DkccALtujzw-3nIq-OoWFlqefXtU_hatKykh53gmWmrvNgmwk8Bh9F2Tal9BH7_H/exec";
 function obtenerUrlScript() { return localStorage.getItem("argos_mb_script_url") || DEFAULT_SCRIPT_URL; }
 
 function mostrarMsg(id, tipo, texto, lista) {
@@ -626,11 +629,12 @@ function renderTabla() {
       <td>${j.application || "—"} / ${j.sub_application || "—"}</td>
       <td>${j.predecesores.join(", ") || "—"} → ${j.sucesores.join(", ") || "—"}</td>
       <td>${j.accion}</td>
+      <td>${j.responsable || "—"}</td>
       <td>${j.origen || "—"}</td>
       <td class="row-actions"><button class="secundario" onclick="quitarJob('${j.job_name.replace(/'/g,"\\'")}')">Quitar</button></td>
     </tr>`).join("");
   wrap.innerHTML = `<table class="jobs-table"><thead><tr>
-    <th>Job</th><th>Tipo</th><th>App/Subapp</th><th>Pred → Suc</th><th>Acción</th><th>Origen</th><th></th>
+    <th>Job</th><th>Tipo</th><th>App/Subapp</th><th>Pred → Suc</th><th>Acción</th><th>Responsable</th><th>Origen</th><th></th>
     </tr></thead><tbody>${filas}</tbody></table>`;
 }
 function quitarJob(nombre) { jobsDeTrabajo = jobsDeTrabajo.filter(j => j.job_name !== nombre); renderTabla(); }
@@ -647,6 +651,7 @@ async function importarExcel(file) {
     renderTabla();
     mostrarMsg(msg, advertencias.length ? "warn" : "ok",
       `✅ ${jobs.length} job(s) importados de <b>${file.name}</b>.`, advertencias);
+    sincronizarJobsASheet(jobs, msg);
   } catch (e) {
     mostrarMsg(msg, "error", `Error leyendo el Excel: ${e.message}`);
   }
@@ -693,7 +698,8 @@ function leerFormulario() {
   const rerun = val("f-rerun_every_minutes");
   const keepActive = val("f-keep_active_days");
   return {
-    job_name: val("f-job_name"), accion: val("f-accion"), application: val("f-application"),
+    job_name: val("f-job_name"), accion: val("f-accion"), responsable: val("f-responsable"),
+    application: val("f-application"),
     sub_application: val("f-sub_application"), nombre_proceso: val("f-nombre_proceso") || val("f-job_name"),
     description: val("f-description"), tipo, tipo_detalle: tipoDetalle, host: val("f-host"), run_as: val("f-run_as"),
     predecesores: parseLista(val("f-predecesores")), sucesores: parseLista(val("f-sucesores")),
@@ -706,13 +712,57 @@ function leerFormulario() {
 }
 
 function limpiarFormulario() {
-  ["f-job_name","f-application","f-sub_application","f-nombre_proceso","f-description","f-host","f-run_as",
+  ["f-job_name","f-application","f-sub_application","f-responsable","f-nombre_proceso","f-description","f-host","f-run_as",
    "f-predecesores","f-sucesores","f-calendario","f-hora_inicio","f-rerun_every_minutes","f-keep_active_days","f-mail_on_notok"]
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
   document.querySelectorAll("#f-weekdays input").forEach(el => el.checked = false);
   document.getElementById("f-confirm").checked = false;
   document.getElementById("f-tipo").value = "script";
   actualizarCamposTipo();
+}
+
+function construirRowPayload(job) {
+  return {
+    job_name: job.job_name, accion: job.accion, responsable: job.responsable || "",
+    application: job.application, sub_application: job.sub_application,
+    nombre_proceso: job.nombre_proceso, description: job.description, tipo: job.tipo,
+    file_path: job.tipo_detalle.file_path || "", file_name: job.tipo_detalle.file_name || "",
+    databricks_job_id: job.tipo_detalle.databricks_job_id || "", pipeline_name: job.tipo_detalle.pipeline_name || "",
+    detalle_otro: job.tipo_detalle.detalle || "", host: job.host, run_as: job.run_as,
+    predecesores: job.predecesores.join(", "), sucesores: job.sucesores.join(", "),
+    weekdays: job.weekdays.join(","), calendario: job.calendario || "", hora_inicio: job.hora_inicio || "",
+    rerun_every_minutes: job.rerun_every_minutes ?? "", confirm: job.confirm,
+    keep_active_days: job.keep_active_days ?? "", mail_on_notok: job.mail_on_notok || "", observaciones: "",
+  };
+}
+
+async function guardarJobEnSheet(job) {
+  const url = obtenerUrlScript();
+  if (!url) return { ok: false, motivo: "sin-url" };
+  try {
+    // sin Content-Type explícito: evita el preflight CORS que Apps Script no maneja bien
+    const r = await fetch(url, { method: "POST", body: JSON.stringify(construirRowPayload(job)) });
+    if (!r.ok) throw new Error(await r.text());
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, motivo: e.message };
+  }
+}
+
+// Sincroniza jobs importados de Excel hacia la Google Sheet, para que ésta
+// termine siendo la base de datos única sin importar el origen real de los
+// datos.
+async function sincronizarJobsASheet(jobs, msg) {
+  if (!obtenerUrlScript() || !jobs.length) return;
+  let ok = 0, fail = 0;
+  for (const j of jobs) {
+    const res = await guardarJobEnSheet(j);
+    if (res.ok) ok++; else fail++;
+  }
+  if (ok || fail) {
+    const el = document.getElementById(msg);
+    if (el) el.innerHTML += ` · Sheet: ${ok} sincronizado(s)${fail ? `, ${fail} con error` : ""}`;
+  }
 }
 
 async function agregarDesdeFormulario(guardarEnSheet) {
@@ -723,26 +773,12 @@ async function agregarDesdeFormulario(guardarEnSheet) {
   renderTabla();
   if (!guardarEnSheet) { mostrarMsg(msg, "ok", `✅ "${job.job_name}" agregado a la lista de trabajo.`); return; }
 
-  const url = obtenerUrlScript();
-  if (!url) { mostrarMsg(msg, "error", "Agregado a la lista, pero no se guardó en la Sheet: falta configurar la URL del Apps Script (paso 1)."); return; }
-  try {
-    const rowPayload = {
-      job_name: job.job_name, accion: job.accion, application: job.application, sub_application: job.sub_application,
-      nombre_proceso: job.nombre_proceso, description: job.description, tipo: job.tipo,
-      file_path: job.tipo_detalle.file_path || "", file_name: job.tipo_detalle.file_name || "",
-      databricks_job_id: job.tipo_detalle.databricks_job_id || "", pipeline_name: job.tipo_detalle.pipeline_name || "",
-      detalle_otro: job.tipo_detalle.detalle || "", host: job.host, run_as: job.run_as,
-      predecesores: job.predecesores.join(", "), sucesores: job.sucesores.join(", "),
-      weekdays: job.weekdays.join(","), calendario: job.calendario || "", hora_inicio: job.hora_inicio || "",
-      rerun_every_minutes: job.rerun_every_minutes ?? "", confirm: job.confirm,
-      keep_active_days: job.keep_active_days ?? "", mail_on_notok: job.mail_on_notok || "", observaciones: "",
-    };
-    // sin Content-Type explícito: evita el preflight CORS que Apps Script no maneja bien
-    const r = await fetch(url, { method: "POST", body: JSON.stringify(rowPayload) });
-    if (!r.ok) throw new Error(await r.text());
+  if (!obtenerUrlScript()) { mostrarMsg(msg, "error", "Agregado a la lista, pero no se guardó en la Sheet: falta configurar la URL del Apps Script (paso 1)."); return; }
+  const res = await guardarJobEnSheet(job);
+  if (res.ok) {
     mostrarMsg(msg, "ok", `✅ "${job.job_name}" guardado en la Google Sheet.`);
-  } catch (e) {
-    mostrarMsg(msg, "error", `Agregado a la lista, pero falló el guardado en la Sheet: ${e.message}`);
+  } else {
+    mostrarMsg(msg, "error", `Agregado a la lista, pero falló el guardado en la Sheet: ${res.motivo}`);
   }
 }
 
@@ -831,7 +867,7 @@ function dibujarFlechas(aristas) {
 }
 
 /* ---- config helpers ---- */
-const HEADERS_SHEET = ["job_name","accion","application","sub_application","nombre_proceso","description","tipo",
+const HEADERS_SHEET = ["id","job_name","accion","responsable","application","sub_application","nombre_proceso","description","tipo",
   "file_path","file_name","databricks_job_id","pipeline_name","detalle_otro","host","run_as","predecesores",
   "sucesores","weekdays","calendario","hora_inicio","rerun_every_minutes","confirm","keep_active_days",
   "mail_on_notok","observaciones","actualizado_en"];
@@ -859,11 +895,12 @@ const APPS_SCRIPT_SOURCE = `/**
 
 const SHEET_NAME = "Jobs";
 const HEADERS = [
-  "job_name", "accion", "application", "sub_application", "nombre_proceso",
-  "description", "tipo", "file_path", "file_name", "databricks_job_id",
-  "pipeline_name", "detalle_otro", "host", "run_as", "predecesores",
-  "sucesores", "weekdays", "calendario", "hora_inicio", "rerun_every_minutes",
-  "confirm", "keep_active_days", "mail_on_notok", "observaciones", "actualizado_en",
+  "id", "job_name", "accion", "responsable", "application", "sub_application",
+  "nombre_proceso", "description", "tipo", "file_path", "file_name",
+  "databricks_job_id", "pipeline_name", "detalle_otro", "host", "run_as",
+  "predecesores", "sucesores", "weekdays", "calendario", "hora_inicio",
+  "rerun_every_minutes", "confirm", "keep_active_days", "mail_on_notok",
+  "observaciones", "actualizado_en",
 ];
 
 function _sheet() {
@@ -879,6 +916,14 @@ function _sheet() {
 function _json(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// id determinista: aplicación + nombre de job. Se recalcula siempre acá
+// (nunca se confía en lo que mande el cliente) para que dos mallas distintas
+// nunca puedan pisarse una fila por casualidad, y para que re-enviar el mismo
+// job (por ejemplo al reimportar un Excel) actualice la fila en vez de duplicarla.
+function _idDe(body) {
+  return String(body.application || "") + "::" + String(body.job_name || "");
 }
 
 function doGet(e) {
@@ -899,19 +944,17 @@ function doPost(e) {
   const sheet = _sheet();
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const body = JSON.parse(e.postData.contents);
-  const jobNameCol = headers.indexOf("job_name");
-  const appCol = headers.indexOf("application");
+  const idCol = headers.indexOf("id");
+  const id = _idDe(body);
   const data = sheet.getDataRange().getValues();
 
-  // clave compuesta (application + job_name): una Sheet puede recibir jobs de
-  // varias mallas/pedidos distintos, y dos mallas distintas pueden reusar el
-  // mismo nombre de job — sin esto, la segunda pisaría la fila de la primera.
   let rowIndex = -1;
   for (let i = 1; i < data.length; i++) {
-    if (data[i][jobNameCol] === body.job_name && data[i][appCol] === body.application) { rowIndex = i + 1; break; }
+    if (data[i][idCol] === id) { rowIndex = i + 1; break; }
   }
 
   const rowValues = headers.map(function (h) {
+    if (h === "id") return id;
     if (h === "actualizado_en") return new Date().toISOString();
     return body[h] !== undefined && body[h] !== null ? body[h] : "";
   });
@@ -921,7 +964,7 @@ function doPost(e) {
   } else {
     sheet.appendRow(rowValues);
   }
-  return _json({ ok: true, job_name: body.job_name });
+  return _json({ ok: true, id: id, job_name: body.job_name });
 }
 `;
 

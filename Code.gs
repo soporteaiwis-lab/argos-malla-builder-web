@@ -1,28 +1,18 @@
 /**
  * ArgOS — Malla Builder Web · Apps Script backend para la Google Sheet
- * "formulario amigable" de requerimientos Control-M.
- *
- * Instrucciones:
- * 1. Crear una Google Sheet nueva. Renombrar la primera pestaña a "Jobs".
- * 2. En la fila 1 pegar (una celda por columna, en este orden) los encabezados
- *    que aparecen en HEADERS más abajo — o usar el botón "Copiar encabezados"
- *    de la página web y pegarlos en A1.
- * 3. Extensiones -> Apps Script. Borrar el contenido de Code.gs y pegar este
- *    archivo completo. Guardar.
- * 4. Implementar -> Nueva implementación -> Tipo "Aplicación web".
- *    - Ejecutar como: Yo (tu cuenta)
- *    - Quién tiene acceso: Cualquier usuario
- *    Implementar, autorizar permisos, y copiar la URL que te entrega
- *    (termina en /exec). Esa es la URL que se pega en la página web.
+ * "formulario amigable" de requerimientos Control-M. Base de datos única y
+ * compartida entre la página local de ArgOS y la página pública de GitHub
+ * Pages — ambas leen/escriben esta misma Sheet vía este mismo Web App.
  */
 
 const SHEET_NAME = "Jobs";
 const HEADERS = [
-  "job_name", "accion", "application", "sub_application", "nombre_proceso",
-  "description", "tipo", "file_path", "file_name", "databricks_job_id",
-  "pipeline_name", "detalle_otro", "host", "run_as", "predecesores",
-  "sucesores", "weekdays", "calendario", "hora_inicio", "rerun_every_minutes",
-  "confirm", "keep_active_days", "mail_on_notok", "observaciones", "actualizado_en",
+  "id", "job_name", "accion", "responsable", "application", "sub_application",
+  "nombre_proceso", "description", "tipo", "file_path", "file_name",
+  "databricks_job_id", "pipeline_name", "detalle_otro", "host", "run_as",
+  "predecesores", "sucesores", "weekdays", "calendario", "hora_inicio",
+  "rerun_every_minutes", "confirm", "keep_active_days", "mail_on_notok",
+  "observaciones", "actualizado_en",
 ];
 
 function _sheet() {
@@ -38,6 +28,14 @@ function _sheet() {
 function _json(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// id determinista: aplicación + nombre de job. Se recalcula siempre acá
+// (nunca se confía en lo que mande el cliente) para que dos mallas distintas
+// nunca puedan pisarse una fila por casualidad, y para que re-enviar el mismo
+// job (por ejemplo al reimportar un Excel) actualice la fila en vez de duplicarla.
+function _idDe(body) {
+  return String(body.application || "") + "::" + String(body.job_name || "");
 }
 
 function doGet(e) {
@@ -58,19 +56,17 @@ function doPost(e) {
   const sheet = _sheet();
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const body = JSON.parse(e.postData.contents);
-  const jobNameCol = headers.indexOf("job_name");
-  const appCol = headers.indexOf("application");
+  const idCol = headers.indexOf("id");
+  const id = _idDe(body);
   const data = sheet.getDataRange().getValues();
 
-  // clave compuesta (application + job_name): una Sheet puede recibir jobs de
-  // varias mallas/pedidos distintos, y dos mallas distintas pueden reusar el
-  // mismo nombre de job — sin esto, la segunda pisaría la fila de la primera.
   let rowIndex = -1;
   for (let i = 1; i < data.length; i++) {
-    if (data[i][jobNameCol] === body.job_name && data[i][appCol] === body.application) { rowIndex = i + 1; break; }
+    if (data[i][idCol] === id) { rowIndex = i + 1; break; }
   }
 
   const rowValues = headers.map(function (h) {
+    if (h === "id") return id;
     if (h === "actualizado_en") return new Date().toISOString();
     return body[h] !== undefined && body[h] !== null ? body[h] : "";
   });
@@ -80,5 +76,5 @@ function doPost(e) {
   } else {
     sheet.appendRow(rowValues);
   }
-  return _json({ ok: true, job_name: body.job_name });
+  return _json({ ok: true, id: id, job_name: body.job_name });
 }
